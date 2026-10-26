@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LogiCore Iberia — AI Route Intelligence</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#06090f;--s1:#0b1120;--s2:#101826;--s3:#162035;
+  --b1:rgba(255,255,255,0.05);--b2:rgba(255,255,255,0.09);--b3:rgba(255,255,255,0.18);
+  --cyan:#00e8b8;--cy2:rgba(0,232,184,0.1);--cy3:rgba(0,232,184,0.05);--cy4:rgba(0,232,184,0.22);
+  --blue:#4f9cf9;--bl2:rgba(79,156,249,0.12);
+  --red:#ff6b6b;--rd2:rgba(255,107,107,0.12);
+  --amber:#ffc043;--am2:rgba(255,192,67,0.12);
+  --green:#22c55e;--gn2:rgba(34,197,94,0.12);
+  --t1:#eef2f7;--t2:#8a9bb0;--t3:#4a5a6e;
+  --sans:'Outfit',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{color:var(--t1);font-family:var(--sans);font-size:14px}
+
+/* NAV */
+nav{
+  height:56px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;
+  background:rgba(6,9,15,0.96);
+  border-bottom:1px solid var(--b2);
+  position:relative;z-index:1000;
+  backdrop-filter:blur(16px);
+}
+.nav-brand{display:flex;align-items:center;gap:12px}
+.nav-icon{
+  width:34px;height:34px;border-radius:9px;
+  background:linear-gradient(135deg,var(--cyan) 0%,#0099dd 100%);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 18px rgba(0,232,184,0.28);
+}
+.nav-icon svg{width:17px;height:17px;fill:none;stroke:#06090f;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.nav-title{font-size:16px;font-weight:700;letter-spacing:-.02em}
+.nav-divider{width:1px;height:18px;background:var(--b3);margin:0 4px}
+.nav-sub{font-size:11px;color:var(--t3);font-family:var(--mono)}
+.nav-tabs{display:flex;gap:2px}
+.ntab{padding:6px 15px;border-radius:7px;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;border:none;background:none;font-family:var(--sans);transition:all .18s}
+.ntab:hover{color:var(--t1);background:var(--b1)}
+.ntab.on{color:var(--cyan);background:var(--cy2);border:1px solid var(--cy4)}
+.nav-right{display:flex;align-items:center;gap:14px}
+.live{display:flex;align-items:center;gap:7px;font-size:11px;font-family:var(--mono);color:var(--t3)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan);animation:px 2s infinite}
+@keyframes px{0%,100%{opacity:1}50%{opacity:.35}}
+.hub-pill{padding:5px 12px;border-radius:7px;background:var(--bl2);border:1px solid rgba(79,156,249,0.28);font-size:11px;font-family:var(--mono);color:var(--blue);font-weight:500}
+
+/* SHELL */
+.shell{display:grid;grid-template-columns:272px 1fr 310px;height:calc(100vh - 56px);overflow:hidden}
+.view{display:none;grid-column:1/-1;height:100%}.view.on{display:grid;grid-template-columns:272px 1fr 310px}
+.fleet-view{display:contents}
+
+/* SIDE PANELS */
+.lp,.rp{overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:14px;scrollbar-width:none}
+.lp::-webkit-scrollbar,.rp::-webkit-scrollbar{display:none}
+.lp{border-right:1px solid var(--b2)}
+
+/* section head */
+.sh{font-size:9.5px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--t3);font-family:var(--mono);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sh::after{content:'';flex:1;height:1px;background:var(--b2)}
+
+/* KPI CARDS */
+.kgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.kc{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:10px 11px;position:relative;overflow:hidden;cursor:default;transition:border-color .18s}
+.kc:hover{border-color:var(--b3)}
+.kc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:10px 10px 0 0}
+.kc.r::before{background:linear-gradient(90deg,var(--red),transparent)}
+.kc.a::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.kc.g::before{background:linear-gradient(90deg,var(--cyan),transparent)}
+.kc-val{font-size:20px;font-weight:700;line-height:1;letter-spacing:-.02em;margin-bottom:3px}
+.kc-val.r{color:var(--red)}.kc-val.a{color:var(--amber)}.kc-val.g{color:var(--cyan)}
+.kc-label{font-size:9.5px;font-family:var(--mono);color:var(--t3);margin-bottom:3px}
+.kc-bench{font-size:9.5px;font-family:var(--mono);padding:1px 5px;border-radius:4px;display:inline-block}
+.kc-bench.r{background:var(--rd2);color:var(--red)}.kc-bench.a{background:var(--am2);color:var(--amber)}
+
+/* FLEET */
+.fc{display:flex;align-items:center;gap:9px;padding:8px 10px;background:var(--s1);border:1px solid var(--b1);border-radius:9px;cursor:pointer;transition:all .18s}
+.fc:hover{border-color:var(--b3);background:var(--s2)}
+.fc.on{border-color:rgba(0,232,184,0.35);background:var(--cy3)}
+.fav{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:var(--mono);flex-shrink:0}
+.fav.active{background:var(--cy2);color:var(--cyan);border:1px solid var(--cy4)}
+.fav.delayed{background:var(--rd2);color:var(--red);border:1px solid rgba(255,107,107,0.25)}
+.fav.idle{background:var(--b1);color:var(--t3);border:1px solid var(--b2)}
+.fmeta{flex:1;min-width:0}
+.fid{font-size:11px;font-weight:600;font-family:var(--mono)}
+.fname{font-size:10px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ftag{font-size:9px;font-family:var(--mono);font-weight:600;padding:2px 6px;border-radius:4px;text-transform:uppercase;flex-shrink:0}
+.ftag.active{background:var(--cy2);color:var(--cyan)}
+.ftag.delayed{background:var(--rd2);color:var(--red)}
+.ftag.idle{background:var(--b1);color:var(--t3)}
+
+/* COST */
+.cost-box{background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:12px}
+.citem{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--b1)}
+.citem:last-of-type{border-bottom:none}
+.cl{font-size:11px;color:var(--t3);font-family:var(--mono)}
+.cv{font-size:12px;font-family:var(--mono);font-weight:500;color:var(--red)}
+.ctotal{margin-top:8px;padding:9px 11px;background:rgba(255,192,67,0.08);border:1px solid rgba(255,192,67,0.2);border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+.ctl{font-size:11px;font-family:var(--mono);font-weight:600;color:var(--amber)}
+.ctv{font-size:18px;font-weight:700;color:var(--amber);letter-spacing:-.02em}
+
+/* MAP OVERLAY — compact */
+.map-overlay{
+  position:absolute;top:10px;left:10px;z-index:999;
+  background:rgba(6,9,15,0.88);border:1px solid var(--b2);
+  border-radius:8px;padding:7px 11px;backdrop-filter:blur(14px);
+}
+.leg-r{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--t2);font-family:var(--mono);line-height:1.9}
+.leg-line{width:18px;height:2px;flex-shrink:0}
+
+/* ANALYTICS & PLANNER VIEWS */
+.anl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:20px;align-content:start}
+.anl-card{background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:16px}
+.anl-title{font-size:12px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.anl-big{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.anl-big.r{color:var(--red)}.anl-big.a{color:var(--amber)}.anl-big.g{color:var(--cyan)}
+.anl-sub{font-size:10px;font-family:var(--mono);color:var(--t3);margin-top:5px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.bar-label{font-size:10px;font-family:var(--mono);color:var(--t3);width:80px;flex-shrink:0}
+.bar-track{flex:1;height:6px;background:var(--b2);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.bar-val{font-size:10px;font-family:var(--mono);width:32px;text-align:right;flex-shrink:0}
+.tbl{width:100%;border-collapse:collapse;font-size:11px}
+.tbl th{font-family:var(--mono);font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;padding:0 0 8px;text-align:left;border-bottom:1px solid var(--b2)}
+.tbl td{padding:7px 0;border-bottom:1px solid var(--b1);color:var(--t2);font-family:var(--mono)}
+.tbl td:last-child{text-align:right}
+.tbl tr:last-child td{border-bottom:none}
+.badge-r{background:var(--rd2);color:var(--red);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:600}
+.badge-a{background:var(--am2);color:var(--amber);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:600}
+.badge-g{background:var(--cy2);color:var(--cyan);padding:2px 6px;border-radius:4px;font-size:9px;font-weight:600}
+.planner-wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;height:100%}
+.planner-left{border-right:1px solid var(--b2);padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.planner-right{padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-label{font-size:9px;font-family:var(--mono);color:var(--t3);letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.form-input{background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-family:var(--mono);font-size:12px;padding:9px 12px;border-radius:8px;outline:none;width:100%}
+.form-input:focus{border-color:rgba(0,232,184,.4)}
+.sched-item{background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:11px;display:flex;align-items:center;gap:10px}
+.sched-time{font-size:11px;font-family:var(--mono);color:var(--cyan);width:42px;flex-shrink:0}
+.sched-name{font-size:12px;font-weight:500}
+.sched-meta{font-size:10px;color:var(--t3);font-family:var(--mono);margin-top:1px}
+
+/* CENTER */
+.center{display:flex;flex-direction:column;overflow:hidden}
+#map{flex:1;z-index:1}
+.leaflet-container{background:#0b1422 !important}
+.leaflet-tile-pane{filter:saturate(0.3) brightness(0.55) hue-rotate(180deg)}
+
+/* CONTROL BAR */
+.cbar{border-top:1px solid var(--b2);padding:12px 16px;background:linear-gradient(0deg,rgba(11,17,32,0.98),rgba(6,9,15,0.8));display:flex;gap:8px;align-items:flex-end;flex-shrink:0}
+.fld{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+.fld label{font-size:9px;font-family:var(--mono);color:var(--t3);letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.fld select{background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-family:var(--mono);font-size:11px;padding:7px 9px;border-radius:8px;outline:none;appearance:none;cursor:pointer;transition:border-color .18s;width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fld select:hover,.fld select:focus{border-color:rgba(0,232,184,0.4)}
+.fld select option{background:var(--s2)}
+.run-btn{padding:8px 18px;border-radius:9px;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:700;letter-spacing:-.01em;background:linear-gradient(135deg,var(--cyan),#00aad4);color:#040d0a;white-space:nowrap;flex-shrink:0;box-shadow:0 4px 22px rgba(0,232,184,0.22);transition:all .2s}
+.run-btn:hover{box-shadow:0 6px 30px rgba(0,232,184,0.38);transform:translateY(-1px)}
+.run-btn:active{transform:translateY(0)}
+.run-btn:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none}
+.loader{
+  position:absolute;inset:0;z-index:9999;
+  background:rgba(6,9,15,0.85);backdrop-filter:blur(10px);
+  display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+}
+.loader.on{display:flex}
+.ring{width:42px;height:42px;border-radius:50%;border:2px solid var(--b2);border-top-color:var(--cyan);animation:spin .75s linear infinite;box-shadow:0 0 18px rgba(0,232,184,0.18)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-lbl{font-size:12px;font-family:var(--mono);color:var(--t3)}
+.loader-sub{font-size:11px;font-family:var(--mono);color:var(--t3);opacity:.5}
+
+/* RIGHT PANEL */
+.empty-s{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;opacity:.28;text-align:center}
+.empty-icon{width:50px;height:50px;border-radius:14px;background:var(--b1);display:flex;align-items:center;justify-content:center}
+.empty-icon svg{width:22px;height:22px;stroke:var(--t2);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.empty-t{font-size:12px;color:var(--t3);font-family:var(--mono);line-height:1.8}
+
+/* RESULTS */
+.hero-card{
+  border-radius:14px;padding:20px;text-align:center;
+  background:linear-gradient(135deg,rgba(0,232,184,0.07),rgba(79,156,249,0.04));
+  border:1px solid rgba(0,232,184,0.18);
+}
+.hero-n{font-size:52px;font-weight:700;color:var(--cyan);line-height:1;letter-spacing:-.04em}
+.hero-l{font-size:11px;font-family:var(--mono);color:var(--t3);margin-top:5px}
+.hero-bar{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;font-size:11px;font-family:var(--mono)}
+.hb-old{color:var(--red)}.hb-arr{color:var(--t3)}.hb-new{color:var(--cyan)}
+
+.rcard{background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:14px}
+.rcard.hi{border-color:rgba(0,232,184,0.2);background:rgba(0,232,184,0.03)}
+.rch{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.rct{font-size:13px;font-weight:600}
+.rcb{font-size:9px;font-family:var(--mono);font-weight:600;padding:3px 8px;border-radius:5px;text-transform:uppercase;letter-spacing:.06em}
+.b-ai{background:var(--cy2);color:var(--cyan)}.b-li{background:var(--bl2);color:var(--blue)}
+
+.mrow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--b1)}
+.mrow:last-child{border-bottom:none}
+.ml{font-size:11px;color:var(--t3);font-family:var(--mono)}
+.mpair{display:flex;align-items:center;gap:8px}
+.mold{font-size:10px;color:var(--red);font-family:var(--mono);text-decoration:line-through;opacity:.7}
+.mnew{font-size:13px;font-weight:700;color:var(--cyan);font-family:var(--mono)}
+.mval{font-size:13px;font-weight:600;font-family:var(--mono)}
+
+.slist{display:flex;flex-direction:column}
+.si{display:flex;gap:10px;padding:7px 0;position:relative}
+.sconn{position:absolute;left:9px;top:22px;bottom:0;width:1px;background:linear-gradient(180deg,rgba(0,232,184,.25),transparent)}
+.si:last-child .sconn{display:none}
+.snode{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;font-family:var(--mono);z-index:1}
+.snode.dep{background:var(--cyan);color:#040d0a;box-shadow:0 0 10px rgba(0,232,184,.35)}
+.snode.stop{border:1.5px solid rgba(0,232,184,.4);color:var(--cyan);background:rgba(0,232,184,.06)}
+.sbody{flex:1}
+.sname{font-size:12px;font-weight:500}
+.smeta{font-size:10px;color:var(--t3);font-family:var(--mono);margin-top:1px}
+.stime{font-size:10px;color:var(--blue);font-family:var(--mono);margin-top:2px}
+
+.ai-box{background:var(--s1);border:1px solid rgba(0,232,184,.15);border-radius:12px;padding:14px}
+.ai-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.ai-chip{display:flex;align-items:center;gap:6px;font-size:9px;font-family:var(--mono);font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:.1em}
+.ai-dot{width:5px;height:5px;border-radius:50%;background:var(--cyan);animation:px 2s infinite}
+.ai-text{font-size:12px;line-height:1.75;color:var(--t2)}
+.ai-risk{margin-top:10px;padding:9px 11px;background:var(--am2);border:1px solid rgba(255,192,67,.2);border-radius:8px;font-size:11px;color:var(--amber);font-family:var(--mono);line-height:1.6}
+
+/* TRUCK MARKER */
+.truck-marker{font-size:22px;line-height:1;filter:drop-shadow(0 0 6px rgba(0,232,184,0.6));transition:all 0.3s}
+
+/* PRINT / PDF EXPORT */
+@media print{
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  nav,#view-analytics,#view-planner,.cbar,.map-overlay,.loader,#emptyS,.lp,.rp{display:none!important}
+  html,body{overflow:visible!important;height:auto!important;background:#fff!important}
+  .shell{display:block!important;height:auto!important}
+  #view-fleet{display:block!important;height:auto!important}
+  #map{height:320px!important;display:block!important}
+  .center{display:block!important}
+  #pdf-summary{display:block!important}
+}
+#pdf-summary{
+  display:none;
+  padding:24px 28px;background:#fff;color:#111;font-family:'Outfit',sans-serif;
+}
+.pdf-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #00e8b8}
+.pdf-logo{font-size:18px;font-weight:700;color:#06090f;letter-spacing:-.02em}
+.pdf-tag{font-size:11px;color:#666;font-family:monospace}
+.pdf-title{font-size:14px;font-weight:600;color:#111;margin-bottom:14px}
+.pdf-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.pdf-kpi{background:#f8fffe;border:1px solid #d0f5ec;border-radius:8px;padding:12px;text-align:center}
+.pdf-kpi-val{font-size:22px;font-weight:700;color:#00b890;line-height:1}
+.pdf-kpi-label{font-size:10px;color:#666;font-family:monospace;margin-top:4px}
+.pdf-reasoning{background:#f8fffe;border:1px solid #d0f5ec;border-radius:8px;padding:14px;font-size:12px;line-height:1.7;color:#333}
+.pdf-risk{margin-top:10px;padding:10px 12px;background:#fffbf0;border:1px solid #fde68a;border-radius:6px;font-size:11px;color:#92400e;font-family:monospace}
+.up{animation:up .3s ease both}
+.up:nth-child(1){animation-delay:.04s}.up:nth-child(2){animation-delay:.1s}
+.up:nth-child(3){animation-delay:.16s}.up:nth-child(4){animation-delay:.22s}
+
+/* Leaflet custom markers */
+.depot-marker{
+  width:36px;height:36px;border-radius:50%;
+  background:var(--cyan);border:3px solid #040d0a;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;
+  color:#040d0a;box-shadow:0 0 18px rgba(0,232,184,.5),0 2px 8px rgba(0,0,0,.5);
+}
+.stop-marker{
+  width:28px;height:28px;border-radius:50%;
+  background:#0b1422;border:2px solid var(--cyan);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;font-weight:700;font-family:'JetBrains Mono',monospace;
+  color:var(--cyan);box-shadow:0 0 10px rgba(0,232,184,.25),0 2px 6px rgba(0,0,0,.5);
+}
+.stop-marker.old{border-color:var(--red);color:var(--red);box-shadow:0 0 8px rgba(255,107,107,.2),0 2px 6px rgba(0,0,0,.5)}
+
+.key-input{width:190px;padding:5px 10px;border-radius:7px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-family:var(--mono);font-size:11px}
+.key-input:focus{outline:none;border-color:var(--cy4)}
+.live.demo{color:var(--amber)}
+.live.demo .live-dot{background:var(--amber);animation:none;box-shadow:none}
+.rcb.b-sim{background:var(--am2);color:var(--amber);border:1px solid rgba(255,192,67,0.3)}
+.inline-note{font-size:11px;color:var(--amber);margin-top:8px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <div class="nav-icon">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    </div>
+    <span class="nav-title">LogiCore Iberia</span>
+    <div class="nav-divider"></div>
+    <span class="nav-sub">Route Intelligence Platform</span>
+  </div>
+  <div class="nav-tabs">
+    <button class="ntab on" onclick="switchTab('fleet',this)">Fleet Overview</button>
+    <button class="ntab" onclick="switchTab('planner',this)">Route Planner</button>
+    <button class="ntab" onclick="switchTab('analytics',this)">Performance Analytics</button>
+  </div>
+  <div class="nav-right">
+    <input type="password" id="apiKeyInput" class="key-input" placeholder="OpenRouter key (optional)" autocomplete="off" title="Kept in this tab only. Leave empty to use simulated results."/>
+    <div class="live" id="modeBadge"><div class="live-dot"></div><span id="modeText">Demo mode · simulated</span></div>
+    <button onclick="exportPDF()" style="padding:5px 12px;border-radius:7px;background:rgba(0,232,184,0.08);border:1px solid rgba(0,232,184,0.25);font-size:11px;font-family:var(--mono);color:var(--cyan);cursor:pointer;font-weight:500;transition:all .18s" onmouseover="this.style.background='rgba(0,232,184,0.16)'" onmouseout="this.style.background='rgba(0,232,184,0.08)'">↓ Export PDF</button>
+    <div class="hub-pill">HUB-01 · MAD</div>
+  </div>
+</nav>
+
+<div class="shell">
+
+<!-- FLEET OVERVIEW VIEW -->
+<div id="view-fleet" class="view on" style="display:grid;grid-template-columns:272px 1fr 310px">
+
+  <!-- LEFT PANEL -->
+  <div class="lp">
+    <div>
+      <div class="sh">Operational KPIs</div>
+      <div class="kgrid">
+        <div class="kc r">
+          <div class="kc-label">On-time delivery</div>
+          <div class="kc-val r">81%</div>
+          <div class="kc-bench r">SLA req. 92%</div>
+        </div>
+        <div class="kc r">
+          <div class="kc-label">Fleet utilisation</div>
+          <div class="kc-val r">61%</div>
+          <div class="kc-bench r">Target 82%</div>
+        </div>
+        <div class="kc a">
+          <div class="kc-label">Route deviation</div>
+          <div class="kc-val a">22%</div>
+          <div class="kc-bench a">Benchmark 6%</div>
+        </div>
+        <div class="kc r">
+          <div class="kc-label">1st attempt del.</div>
+          <div class="kc-val r">76%</div>
+          <div class="kc-bench r">Target 92%</div>
+        </div>
+        <div class="kc r">
+          <div class="kc-label">Driver overtime</div>
+          <div class="kc-val r" style="font-size:16px">214k hrs</div>
+          <div class="kc-bench r">Benchmark 95k</div>
+        </div>
+        <div class="kc a">
+          <div class="kc-label">CO₂ / shipment</div>
+          <div class="kc-val a" style="font-size:16px">4.9 kg</div>
+          <div class="kc-bench a">Target 2.8 kg</div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="sh">Active fleet</div>
+      <div style="display:flex;flex-direction:column;gap:5px" id="fleetList"></div>
+    </div>
+    <div class="cost-box">
+      <div class="sh" style="margin-bottom:10px">Annual cost exposure</div>
+      <div class="citem"><span class="cl">SLA breach penalties</span><span class="cv">€31M</span></div>
+      <div class="citem"><span class="cl">Excess fuel cost</span><span class="cv">€17M</span></div>
+      <div class="citem"><span class="cl">Driver overtime</span><span class="cv">€41M</span></div>
+      <div class="ctotal"><span class="ctl">Total addressable exposure</span><span class="ctv">€89M</span></div>
+    </div>
+  </div>
+
+  <!-- CENTER: MAP + CONTROLS -->
+  <div class="center" style="position:relative">
+    <div id="map" style="flex:1"></div>
+    <div id="pdf-summary">
+      <div class="pdf-header">
+        <div><div class="pdf-logo">LogiCore Iberia</div><div class="pdf-tag">Route Intelligence Platform · AI Optimisation Report</div></div>
+        <div class="pdf-tag" id="pdf-date"></div>
+      </div>
+      <div class="pdf-title" id="pdf-title">AI Route Optimisation — Results Summary</div>
+      <div class="pdf-grid" id="pdf-grid"></div>
+      <div class="pdf-reasoning" id="pdf-reasoning"></div>
+      <div class="pdf-risk" id="pdf-risk"></div>
+    </div>
+    <div class="map-overlay" id="mapLegend">
+      <div class="leg-r"><div class="leg-line" style="border-top:2px dashed rgba(255,107,107,.6)"></div>Current route</div>
+      <div class="leg-r"><div class="leg-line" style="background:var(--cyan)"></div>AI-optimised</div>
+    </div>
+    <div class="loader" id="loader">
+      <div class="ring"></div>
+      <div class="loader-lbl" id="loaderLbl">Optimising route...</div>
+      <div class="loader-sub">AI model running optimisation</div>
+    </div>
+    <div class="cbar">
+      <div class="fld">
+        <label>Origin depot</label>
+        <select id="s1">
+          <option value="hub01">Hub-01 · Madrid</option>
+          <option value="dep04">Depot-04 · Alcalá</option>
+          <option value="dep07">Depot-07 · Getafe</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>Delivery zone</label>
+        <select id="s2">
+          <option value="A">Zone A — North (8 stops)</option>
+          <option value="B">Zone B — South (6 stops)</option>
+          <option value="C">Zone C — East (8 stops)</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>Vehicle</label>
+        <select id="s3">
+          <option value="lci204">LCI-204 · 7.5T · 87%</option>
+          <option value="lci211">LCI-211 · 3.5T · 62%</option>
+          <option value="lci198">LCI-198 · 12T · 94%</option>
+        </select>
+      </div>
+      <div class="fld" style="max-width:105px">
+        <label>Priority</label>
+        <select id="s4">
+          <option value="sla">SLA first</option>
+          <option value="fuel">Fuel saving</option>
+          <option value="speed">Speed</option>
+        </select>
+      </div>
+      <button class="run-btn" id="runBtn" onclick="go()">Run AI Optimisation ↗</button>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rp" style="border-left:1px solid var(--b2)">
+    <div class="empty-s" id="emptyS">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 13l4.553 2.276A1 1 0 0021 21.382V10.618a1 1 0 00-.553-.894L15 7m0 13V7m0 0L9 4"/></svg>
+      </div>
+      <div class="empty-t">Select route parameters<br>and run AI optimisation<br>to view analysis</div>
+    </div>
+    <div id="out" style="display:none;flex-direction:column;gap:12px"></div>
+  </div>
+
+</div><!-- /fleet view -->
+
+<!-- PERFORMANCE ANALYTICS VIEW -->
+<div id="view-analytics" class="view" style="overflow-y:auto;display:none;grid-column:1/-1">
+  <div class="anl-grid">
+    <div class="anl-card">
+      <div class="anl-title">On-time delivery rate <span class="badge-r">Critical</span></div>
+      <div class="anl-big r">81%</div>
+      <div class="anl-sub">SLA threshold: 92% · Industry benchmark: 94%</div>
+      <div style="margin-top:14px">
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">LogiCore</div><div class="bar-track"><div class="bar-fill" style="width:81%;background:var(--red)"></div></div><div class="bar-val" style="color:var(--red)">81%</div></div>
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">SLA threshold</div><div class="bar-track"><div class="bar-fill" style="width:92%;background:var(--amber)"></div></div><div class="bar-val" style="color:var(--amber)">92%</div></div>
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">Industry</div><div class="bar-track"><div class="bar-fill" style="width:94%;background:var(--cyan)"></div></div><div class="bar-val" style="color:var(--cyan)">94%</div></div>
+      </div>
+    </div>
+    <div class="anl-card">
+      <div class="anl-title">Fleet utilisation <span class="badge-r">–21pp gap</span></div>
+      <div class="anl-big r">61%</div>
+      <div class="anl-sub">Generating €17M excess fuel annually · Target: 82%</div>
+      <div style="margin-top:14px">
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">Current</div><div class="bar-track"><div class="bar-fill" style="width:61%;background:var(--red)"></div></div><div class="bar-val" style="color:var(--red)">61%</div></div>
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">Target</div><div class="bar-track"><div class="bar-fill" style="width:82%;background:var(--cyan)"></div></div><div class="bar-val" style="color:var(--cyan)">82%</div></div>
+      </div>
+    </div>
+    <div class="anl-card">
+      <div class="anl-title">Route deviation rate <span class="badge-a">High</span></div>
+      <div class="anl-big a">22%</div>
+      <div class="anl-sub">Benchmark: 6% · Caused by unreliable static planning tool</div>
+      <div style="margin-top:14px">
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">LogiCore</div><div class="bar-track"><div class="bar-fill" style="width:22%;background:var(--amber)"></div></div><div class="bar-val" style="color:var(--amber)">22%</div></div>
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">Benchmark</div><div class="bar-track"><div class="bar-fill" style="width:6%;background:var(--cyan)"></div></div><div class="bar-val" style="color:var(--cyan)">6%</div></div>
+      </div>
+    </div>
+    <div class="anl-card" style="grid-column:1/-1">
+      <div class="anl-title">Client SLA status — top accounts at risk</div>
+      <table class="tbl">
+        <thead><tr><th>Client</th><th>Segment</th><th>On-time rate</th><th>SLA threshold</th><th>Status</th><th>Contract risk</th></tr></thead>
+        <tbody>
+          <tr><td>CLIENT-044 (Vallecas)</td><td>FMCG</td><td>79%</td><td>92%</td><td><span class="badge-r">Breach</span></td><td style="color:var(--red)">Review flagged</td></tr>
+          <tr><td>CLIENT-203 (Pozuelo)</td><td>FMCG</td><td>77%</td><td>90%</td><td><span class="badge-r">Breach</span></td><td style="color:var(--red)">Review flagged</td></tr>
+          <tr><td>CLIENT-112 (Leganés)</td><td>Retail</td><td>83%</td><td>88%</td><td><span class="badge-a">At risk</span></td><td style="color:var(--amber)">Watch list</td></tr>
+          <tr><td>CLIENT-334 (Fuenlabrada)</td><td>Retail</td><td>86%</td><td>88%</td><td><span class="badge-a">At risk</span></td><td style="color:var(--amber)">Watch list</td></tr>
+          <tr><td>CLIENT-091 (Getafe)</td><td>FMCG</td><td>91%</td><td>88%</td><td><span class="badge-g">Compliant</span></td><td style="color:var(--cyan)">Stable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="anl-card">
+      <div class="anl-title">Cost exposure breakdown</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">SLA penalties</div><div class="bar-track"><div class="bar-fill" style="width:35%;background:var(--red)"></div></div><div class="bar-val" style="color:var(--red)">€31M</div></div>
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">Overtime</div><div class="bar-track"><div class="bar-fill" style="width:46%;background:var(--amber)"></div></div><div class="bar-val" style="color:var(--amber)">€41M</div></div>
+        <div class="bar-row"><div class="bar-label" style="font-size:9.5px">Excess fuel</div><div class="bar-track"><div class="bar-fill" style="width:19%;background:var(--blue)"></div></div><div class="bar-val" style="color:var(--blue)">€17M</div></div>
+        <div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--b2);display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px"><span style="color:var(--t3)">Total addressable</span><span style="color:var(--amber);font-weight:700;font-size:16px">€89M</span></div>
+      </div>
+    </div>
+    <div class="anl-card">
+      <div class="anl-title">AI optimisation ROI projection</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;padding:8px;background:var(--s2);border-radius:7px">
+          <span style="color:var(--t3)">Investment budget</span><span style="color:var(--t1);font-weight:600">€3.8M</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;padding:8px;background:var(--s2);border-radius:7px">
+          <span style="color:var(--t3)">Addressable savings</span><span style="color:var(--cyan);font-weight:600">€89M</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:11px;padding:8px;background:rgba(0,232,184,0.06);border:1px solid var(--cy4);border-radius:7px">
+          <span style="color:var(--cyan)">Potential ROI</span><span style="color:var(--cyan);font-weight:700;font-size:16px">23.4×</span>
+        </div>
+        <div style="font-size:10px;color:var(--t3);font-family:var(--mono);line-height:1.6">NPS gap vs GreenLog: 31 vs 58. Three top-10 clients at contract review risk representing ~40% revenue.</div>
+      </div>
+    </div>
+  </div>
+</div><!-- /analytics view -->
+
+<!-- ROUTE PLANNER VIEW -->
+<div id="view-planner" class="view" style="display:none;grid-column:1/-1;overflow:hidden">
+  <div class="planner-wrap">
+    <div class="planner-left">
+      <div class="sh">Schedule a new route</div>
+      <div class="form-group">
+        <div class="form-label">Origin hub</div>
+        <select class="form-input" style="appearance:none">
+          <option>Hub-01 · Madrid Central — Main distribution hub</option>
+          <option>Depot-04 · Alcalá de Henares — Eastern gateway</option>
+          <option>Depot-07 · Getafe — Southern hub</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Client SLA tier</div>
+        <select class="form-input" style="appearance:none">
+          <option>Tier 1 — 92% SLA · FMCG priority accounts</option>
+          <option>Tier 2 — 88% SLA · Standard retail clients</option>
+          <option>Tier 3 — 85% SLA · E-commerce fulfilment</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Departure time</div>
+        <input class="form-input" type="time" value="07:30">
+      </div>
+      <div class="form-group">
+        <div class="form-label">Max stops per run</div>
+        <select class="form-input" style="appearance:none">
+          <option>8 stops (recommended)</option>
+          <option>6 stops (high-priority only)</option>
+          <option>10 stops (high utilisation)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Optimisation mode</div>
+        <select class="form-input" style="appearance:none">
+          <option>Balanced — SLA + fuel efficiency</option>
+          <option>SLA compliance first</option>
+          <option>Fuel efficiency first</option>
+          <option>Minimum overtime</option>
+        </select>
+      </div>
+      <button class="run-btn" style="margin-top:4px;width:100%;text-align:center" onclick="switchTab('fleet',document.querySelector('.ntab'))">Open in Route Planner ↗</button>
+    </div>
+    <div class="planner-right">
+      <div class="sh">Today's scheduled runs — HUB-01</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <div class="sched-item"><div class="sched-time">07:30</div><div><div class="sched-name">LCI-204 · Zone A North</div><div class="sched-meta">8 stops · M. García · 87% load · SLA Tier 1</div></div><span class="badge-g" style="margin-left:auto">Active</span></div>
+        <div class="sched-item"><div class="sched-time">08:00</div><div><div class="sched-name">LCI-217 · Zone C East</div><div class="sched-meta">8 stops · R. López · 71% load · SLA Tier 2</div></div><span class="badge-g" style="margin-left:auto">Active</span></div>
+        <div class="sched-item"><div class="sched-time">08:30</div><div><div class="sched-name">LCI-198 · Zone B South</div><div class="sched-meta">6 stops · A. Sousa · 94% load · SLA Tier 1</div></div><span class="badge-r" style="margin-left:auto">Delayed</span></div>
+        <div class="sched-item"><div class="sched-time">09:00</div><div><div class="sched-name">LCI-211 · Zone A North</div><div class="sched-meta">8 stops · J. Fernández · 62% load · SLA Tier 2</div></div><span class="badge-a" style="margin-left:auto">Scheduled</span></div>
+        <div class="sched-item"><div class="sched-time">09:30</div><div><div class="sched-name">LCI-189 · Zone B South</div><div class="sched-meta">6 stops · C. Martins · 55% load · SLA Tier 3</div></div><span class="badge-a" style="margin-left:auto">Scheduled</span></div>
+      </div>
+      <div class="sh" style="margin-top:8px">Hub-01 daily throughput</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--cyan)">147</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--t3);margin-top:3px">Deliveries today</div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--amber)">3</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--t3);margin-top:3px">SLA at risk</div>
+        </div>
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:9px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--red)">1</div>
+          <div style="font-size:10px;font-family:var(--mono);color:var(--t3);margin-top:3px">Delayed run</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /planner view -->
+</div><!-- /shell -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── FLEET ──────────────────────────────────────────────────
+const FL=[
+  {id:'LCI-204',drv:'M. García',load:'87%',s:'active'},
+  {id:'LCI-211',drv:'J. Fernández',load:'62%',s:'idle'},
+  {id:'LCI-198',drv:'A. Sousa',load:'94%',s:'delayed'},
+  {id:'LCI-217',drv:'R. López',load:'71%',s:'active'},
+  {id:'LCI-189',drv:'C. Martins',load:'55%',s:'idle'},
+];
+document.getElementById('fleetList').innerHTML=FL.map((v,i)=>`
+  <div class="fc${i===0?' on':''}" onclick="document.querySelectorAll('.fc').forEach(e=>e.classList.remove('on'));this.classList.add('on')">
+    <div class="fav ${v.s}">${v.id.slice(-3)}</div>
+    <div class="fmeta"><div class="fid">${v.id}</div><div class="fname">${v.drv} · ${v.load} load</div></div>
+    <div class="ftag ${v.s}">${v.s}</div>
+  </div>`).join('');
+
+// ── MAP SETUP ──────────────────────────────────────────────
+const map = L.map('map', {
+  center: [40.42, -3.70],
+  zoom: 11,
+  zoomControl: false,
+  attributionControl: false
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18
+}).addTo(map);
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// ── REAL MADRID COORDINATES ────────────────────────────────
+// Zone A stops (North Madrid)
+const ZONES = {
+  A: {
+    depot: [40.4168, -3.7038], // Madrid city centre (Hub-01)
+    stops: [
+      { ll:[40.4640,-3.6920], n:'CLIENT-044 · Hortaleza',     m:'FMCG · 12 pallets',    t:'09:15', w:'09:00–10:00' },
+      { ll:[40.4900,-3.6760], n:'CLIENT-112 · Barajas',        m:'Retail · 8 pallets',   t:'10:10', w:'09:30–11:00' },
+      { ll:[40.4780,-3.6430], n:'CLIENT-078 · San Blas',       m:'FMCG · 11 pallets',    t:'11:00', w:'10:30–12:00' },
+      { ll:[40.4520,-3.6550], n:'CLIENT-203 · Ciudad Lineal',  m:'Retail · 9 pallets',   t:'11:55', w:'11:30–13:00' },
+      { ll:[40.4350,-3.6280], n:'CLIENT-091 · Vallecas',       m:'FMCG · 6 pallets',     t:'12:50', w:'12:00–14:00' },
+      { ll:[40.4100,-3.6800], n:'CLIENT-157 · Retiro',         m:'Retail · 7 pallets',   t:'13:45', w:'13:00–15:00' },
+      { ll:[40.4450,-3.7250], n:'CLIENT-334 · Chamberí',       m:'FMCG · 5 pallets',     t:'14:40', w:'14:00–16:00' },
+      { ll:[40.4680,-3.7600], n:'CLIENT-229 · Fuencarral',     m:'Retail · 10 pallets',  t:'15:30', w:'15:00–17:00' },
+    ]
+  },
+  B: {
+    depot: [40.3980, -3.7200], // Getafe area
+    stops: [
+      { ll:[40.3650,-3.7150], n:'CLIENT-055 · Getafe Norte',   m:'FMCG · 14 pallets',   t:'09:00', w:'08:30–10:00' },
+      { ll:[40.3450,-3.7300], n:'CLIENT-119 · Leganés',        m:'Retail · 9 pallets',  t:'09:55', w:'09:30–11:00' },
+      { ll:[40.3290,-3.7200], n:'CLIENT-088 · Alcorcón',       m:'FMCG · 7 pallets',    t:'10:50', w:'10:00–12:00' },
+      { ll:[40.3150,-3.6990], n:'CLIENT-241 · Parla',          m:'Retail · 11 pallets', t:'11:45', w:'11:00–13:00' },
+      { ll:[40.2980,-3.8100], n:'CLIENT-173 · Fuenlabrada',    m:'FMCG · 8 pallets',    t:'12:50', w:'12:00–14:30' },
+      { ll:[40.3830,-3.7900], n:'CLIENT-302 · Móstoles',       m:'Retail · 6 pallets',  t:'14:00', w:'13:30–15:30' },
+    ]
+  },
+  C: {
+    depot: [40.4820, -3.3690], // Alcalá de Henares
+    stops: [
+      { ll:[40.4880,-3.3750], n:'CLIENT-061 · Alcalá Centro',  m:'FMCG · 16 pallets',   t:'08:45', w:'08:30–10:00' },
+      { ll:[40.5000,-3.4200], n:'CLIENT-144 · Torrejón',       m:'Retail · 10 pallets', t:'09:40', w:'09:00–11:00' },
+      { ll:[40.5150,-3.5200], n:'CLIENT-209 · Paracuellos',    m:'FMCG · 8 pallets',    t:'10:35', w:'10:00–12:00' },
+      { ll:[40.5060,-3.6100], n:'CLIENT-278 · San Fernando',   m:'Retail · 12 pallets', t:'11:25', w:'11:00–13:00' },
+      { ll:[40.4830,-3.6600], n:'CLIENT-315 · Coslada',        m:'FMCG · 9 pallets',    t:'12:20', w:'12:00–13:30' },
+      { ll:[40.4600,-3.6750], n:'CLIENT-187 · Vicálvaro',      m:'Retail · 7 pallets',  t:'13:15', w:'12:30–14:30' },
+      { ll:[40.4400,-3.6800], n:'CLIENT-098 · Rivas',          m:'FMCG · 11 pallets',   t:'14:05', w:'13:30–15:30' },
+      { ll:[40.4250,-3.7050], n:'CLIENT-422 · Vallecas Sur',   m:'Retail · 6 pallets',  t:'15:00', w:'14:30–16:00' },
+    ]
+  }
+};
+
+// Old unoptimised route order (inefficient)
+const OLD_ORDER = { A:[0,4,1,6,3,2,7,5], B:[0,4,2,5,1,3], C:[0,5,3,1,6,4,2,7] };
+// AI optimised order (geographically sensible)
+const OPT_ORDER = { A:[0,1,2,3,4,5,6,7], B:[0,1,2,3,4,5], C:[0,1,2,3,4,5,6,7] };
+
+let currentLayers = [];
+let markersLayer = [];
+
+function clearMap() {
+  currentLayers.forEach(l => map.removeLayer(l));
+  markersLayer.forEach(l => map.removeLayer(l));
+  currentLayers = [];
+  markersLayer = [];
+}
+
+function makeIcon(label, type) {
+  const html = type === 'depot'
+    ? `<div class="depot-marker">${label}</div>`
+    : `<div class="stop-marker${type==='old'?' old':''}">${label}</div>`;
+  return L.divIcon({ html, className:'', iconSize:[type==='depot'?36:28,type==='depot'?36:28], iconAnchor:[type==='depot'?18:14,type==='depot'?18:14] });
+}
+
+function drawOldRoute(zone) {
+  const z = ZONES[zone];
+  const order = OLD_ORDER[zone];
+  const pts = [z.depot, ...order.map(i => z.stops[i].ll)];
+  const line = L.polyline(pts, {
+    color:'#ff6b6b', weight:2.5, opacity:0.45, dashArray:'9 6'
+  }).addTo(map);
+  currentLayers.push(line);
+}
+
+let truckMarker = null;
+let truckInterval = null;
+
+function animateTruck(routePoints) {
+  if(truckInterval) clearInterval(truckInterval);
+  if(truckMarker) map.removeLayer(truckMarker);
+  const icon = L.divIcon({html:'<div class="truck-marker">🚛</div>',className:'',iconSize:[30,30],iconAnchor:[15,15]});
+  truckMarker = L.marker(routePoints[0], {icon, zIndexOffset:1000}).addTo(map);
+  let i = 0;
+  truckInterval = setInterval(() => {
+    i++;
+    if(i >= routePoints.length){ clearInterval(truckInterval); return; }
+    truckMarker.setLatLng(routePoints[i]);
+  }, 120);
+}
+
+async function drawOptRoute(zone, onDone) {
+  const z = ZONES[zone];
+  const order = OPT_ORDER[zone];
+  const keyPts = [z.depot, ...order.map(i => z.stops[i].ll)];
+
+  // Depot marker
+  const depM = L.marker(z.depot, { icon: makeIcon('D', 'depot') }).addTo(map);
+  markersLayer.push(depM);
+  order.forEach((si, idx) => {
+    const s = z.stops[si];
+    const m = L.marker(s.ll, { icon: makeIcon(idx+1, 'stop') })
+      .bindPopup(`<b style="font-family:monospace;color:#00e8b8">${s.n}</b><br><span style="font-size:11px;color:#8a9bb0;font-family:monospace">${s.m}</span><br><span style="font-size:11px;color:#4f9cf9;font-family:monospace">ETA ${s.t} · Window ${s.w}</span>`)
+      .addTo(map);
+    markersLayer.push(m);
+  });
+
+  // Try OSRM for real road routing
+  let roadPoints = keyPts;
+  try {
+    const coords = keyPts.map(p => `${p[1]},${p[0]}`).join(';');
+    const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`);
+    const data = await res.json();
+    if(data.routes && data.routes[0]) {
+      // GeoJSON coords are [lng, lat], Leaflet needs [lat, lng]
+      roadPoints = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+    }
+  } catch(e) { /* fallback to straight lines */ }
+
+  const glow = L.polyline(roadPoints, { color:'rgba(0,232,184,0.15)', weight:8, opacity:1 }).addTo(map);
+  const line = L.polyline(roadPoints, { color:'#00e8b8', weight:2.5, opacity:0.9 }).addTo(map);
+  currentLayers.push(glow, line);
+
+  map.fitBounds(L.polyline(roadPoints).getBounds().pad(0.12), { animate:true, duration:0.8 });
+  animateTruck(roadPoints);
+  if(onDone) onDone();
+}
+
+function drawInitialState(zone) {
+  clearMap();
+  const z = ZONES[zone];
+  drawOldRoute(zone);
+  const depM = L.marker(z.depot, { icon: makeIcon('D', 'depot') }).addTo(map);
+  markersLayer.push(depM);
+  OLD_ORDER[zone].forEach((si, idx) => {
+    const s = z.stops[si];
+    const m = L.marker(s.ll, { icon: makeIcon(idx+1, 'old') }).addTo(map);
+    markersLayer.push(m);
+  });
+  const allPts = [z.depot, ...z.stops.map(s=>s.ll)];
+  map.fitBounds(L.polyline(allPts).getBounds().pad(0.12), { animate:true, duration:0.6 });
+}
+
+// Init with Zone A
+drawInitialState('A');
+document.getElementById('s2').addEventListener('change', e => {
+  drawInitialState(e.target.value);
+  document.getElementById('emptyS').style.display='flex';
+  document.getElementById('out').style.display='none';
+});
+
+// ── STOPS DATA for right panel ─────────────────────────────
+function getStops(zone) {
+  const z = ZONES[zone];
+  const order = OPT_ORDER[zone];
+  const depot = { n:'Origin depot — '+document.getElementById('s1').options[document.getElementById('s1').selectedIndex].text.split('·')[1].trim(), m:'Departure point', t:'08:00', w:'—' };
+  return [depot, ...order.map(i => z.stops[i])];
+}
+
+// ── PRIORITY-SPECIFIC PROMPTS ──────────────────────────────
+function buildPrompt(zone, vehicle, priority) {
+  const zoneNames = {A:'North Madrid (Hortaleza, Barajas, Vallecas corridor)', B:'South Madrid (Getafe, Leganés, Fuenlabrada cluster)', C:'East Corridor (Alcalá de Henares to Madrid)'};
+  const vehicleSpecs = {lci204:'LCI-204, 7.5 tonne vehicle at 87% load capacity', lci211:'LCI-211, 3.5 tonne vehicle at 62% load capacity', lci198:'LCI-198, 12 tonne heavy vehicle at 94% load capacity — near capacity limit'};
+
+  const priorityContext = {
+    sla: `Priority: SLA compliance above all else. LogiCore is currently 11 percentage points below the 92% SLA threshold. Three top-10 clients representing 40% of revenue have flagged contract review. Every delivery window breach risks €31M in annual penalties. The AI must sequence stops to maximise window compliance, even at the cost of fuel efficiency.`,
+    fuel: `Priority: Fuel efficiency and emissions reduction. Fleet utilisation is at 61% vs 82% benchmark, costing €17M in excess fuel annually. CO₂ per shipment is 4.9kg vs a 2.8kg benchmark, creating CSRD regulatory exposure from 2026. The AI must minimise total distance and eliminate backtracking, accepting minor window risk where buffers allow.`,
+    speed: `Priority: Maximum speed and throughput. Driver overtime stands at 214,000 hrs/year vs a 95,000 benchmark, costing €41M annually. The 23% driver turnover rate (vs 14% industry average) is partly driven by unsustainable shift lengths. The AI must minimise total route time, consolidating tightly clustered stops and reducing dead miles to get the driver back to depot earliest.`
+  };
+
+  const metricFocus = {
+    sla: 'on_time_probability should be 95-97, fuel_saving_pct 10-15 (secondary), overtime_reduction_hrs 1.0-1.5',
+    fuel: 'fuel_saving_pct should be 20-26, co2_kg should be 2.7-3.0, on_time_probability 91-93 (acceptable trade-off)',
+    speed: 'overtime_reduction_hrs should be 2.0-2.8, distance_km minimised, fuel_saving_pct 14-18'
+  };
+
+  return `You are the AI route optimisation engine for LogiCore Iberia's Route Intelligence Platform. You are presenting results to the company's Board of Directors in a live demonstration.
+
+LOGICORE OPERATIONAL DATA:
+- On-time delivery: 81% (SLA contractual threshold: 92%, industry benchmark: 94%) — currently in breach
+- Fleet utilisation: 61% vs 82% benchmark — generating €17M excess fuel annually
+- Route deviation: 22% of journeys vs 6% benchmark (static planning tool so unreliable drivers self-reroute)
+- Driver overtime: 214,000 hrs/year vs 95,000 benchmark — €41M annual cost; union filed grievance Q2
+- SLA penalty exposure: €31M/year; 3 of top 10 clients (≈40% revenue) at contract review
+- CO₂/shipment: 4.9 kg vs 2.8 kg benchmark (CSRD mandatory from 2026)
+- First-attempt delivery: 76%, target 92%; e-commerce segment worse at 71%
+- NPS: 31 vs competitor GreenLog NPS 58
+- Total addressable cost exposure: €89M/year
+
+ROUTE CONTEXT:
+- Zone: ${zoneNames[zone]}
+- Vehicle: ${vehicleSpecs[vehicle]}
+- ${priorityContext[priority]}
+
+OUTPUT: Return ONLY a raw JSON object. No markdown. No explanation. No preamble. Just the JSON.
+Metric targets for this priority: ${metricFocus[priority]}
+
+{"fuel_saving_pct":<int>,"on_time_probability":<int>,"co2_kg":<number with 1 decimal>,"overtime_reduction_hrs":<number with 1 decimal>,"sla_compliant":<bool>,"distance_km":<int>,"reasoning":"<3 sentences: 1) what the AI changed vs the current static plan and why, 2) how this directly addresses the chosen priority metric with a specific number, 3) secondary benefit for another KPI. Reference specific client IDs from the zone>","risk_flag":"<1 concrete sentence about the most significant constraint or trade-off created by this priority setting>"}`;
+}
+
+// ── MAIN OPTIMISATION ──────────────────────────────────────
+function refreshMode(){
+  const live = !!(document.getElementById('apiKeyInput').value || '').trim();
+  document.getElementById('modeBadge').classList.toggle('demo', !live);
+  document.getElementById('modeText').textContent = live ? 'Claude AI · live' : 'Demo mode · simulated';
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const inp = document.getElementById('apiKeyInput');
+  try { inp.value = sessionStorage.getItem('lc_key') || ''; } catch(e) {}
+  inp.addEventListener('input', () => { try { sessionStorage.setItem('lc_key', inp.value.trim()); } catch(e) {} refreshMode(); });
+  refreshMode();
+});
+async function go() {
+  const btn = document.getElementById('runBtn');
+  const loader = document.getElementById('loader');
+  const zone = document.getElementById('s2').value;
+  const vehicle = document.getElementById('s3').value;
+  const priority = document.getElementById('s4').value;
+
+  document.getElementById('emptyS').style.display = 'none';
+  document.getElementById('out').style.display = 'none';
+  btn.disabled = true;
+  loader.classList.add('on');
+
+  let r;
+  try {
+    const apiKey = (document.getElementById('apiKeyInput').value || '').trim();
+    if (!apiKey) throw new Error('No API key');
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`,'X-Title':'LogiCore Route Intelligence'},
+      body: JSON.stringify({
+        model:'anthropic/claude-sonnet-4',
+        max_tokens:1000,
+        messages:[{ role:'user', content: buildPrompt(zone, vehicle, priority) }]
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    const raw = d.choices?.[0]?.message?.content || '{}';
+    r = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    r._simulated = false;
+  } catch(e) {
+    // Fallback differs per priority
+    const fallbacks = {
+      sla:  { fuel_saving_pct:13, on_time_probability:96, co2_kg:3.6, overtime_reduction_hrs:1.2, sla_compliant:true,  distance_km:92, reasoning:`The AI re-sequenced all stops to honour client time windows in strict priority order, placing CLIENT-044 and CLIENT-112 first given their earliest contractual windows. This directly raises on-time probability to 96%, closing the gap from 81% to above the 92% SLA threshold for the first time in two years. As a secondary benefit, eliminating reactive rerouting reduces overtime by 1.2 hrs on this run alone.`, risk_flag:'Prioritising window compliance adds 8km vs the fuel-optimised route — acceptable given the €31M SLA penalty exposure this route directly protects.' },
+      fuel: { fuel_saving_pct:23, on_time_probability:91, co2_kg:2.9, overtime_reduction_hrs:1.5, sla_compliant:true,  distance_km:81, reasoning:`The AI consolidated geographically adjacent stops into tight clusters, eliminating the 22km of backtracking present in the current static plan between CLIENT-334 and CLIENT-157. This delivers a 23% fuel reduction — equivalent to €4,100 saved on this single run, scaling to €2.2M annually across the Madrid hub. CO₂ per shipment drops from 4.9 to 2.9 kg, moving LogiCore into CSRD compliance range ahead of the 2026 mandate.`, risk_flag:'CLIENT-203 operates with a 13:30–15:30 window — fuel-first sequencing leaves a 12-minute SLA buffer on this stop; driver must not delay at CLIENT-334.' },
+      speed:{ fuel_saving_pct:16, on_time_probability:93, co2_kg:3.2, overtime_reduction_hrs:2.3, sla_compliant:true,  distance_km:84, reasoning:`The AI identified that four consecutive stops in the northern cluster (CLIENT-044, CLIENT-112, CLIENT-078, CLIENT-203) can be completed in a single sweep without returning to the main arterial, cutting 31 minutes of dead time vs the current plan. This reduces total route time by 2.3 hours, directly addressing the 214,000 hrs/year overtime burden that cost LogiCore €41M last year. Faster completion also improves fleet availability for a second run, increasing the 61% utilisation rate.`, risk_flag:'Speed-first routing compresses stop dwell times — drivers must maintain the 8-minute unloading target per stop to preserve SLA compliance on the final two deliveries.' },
+    };
+    r = Object.assign({}, fallbacks[priority], {_simulated:true});
+  }
+
+  loader.classList.remove('on');
+  clearMap();
+  drawOldRoute(zone);
+  setTimeout(() => {
+    clearMap();
+    drawOptRoute(zone, () => {
+      render(r, zone);
+      btn.disabled = false;
+    });
+  }, 600);
+}
+
+function render(r, zone) {
+  lastResult = r;
+  lastZone = zone;
+  const stops = getStops(zone);
+  const el = document.getElementById('out');
+  el.innerHTML = `
+    <div class="hero-card up">
+      <div class="hero-n">${r.on_time_probability}%</div>
+      <div class="hero-l">projected on-time delivery probability</div>
+      <div class="hero-bar">
+        <span class="hb-old">81% current</span>
+        <span class="hb-arr">────→</span>
+        <span class="hb-new">${r.on_time_probability}% optimised</span>
+      </div>
+    </div>
+
+    <div class="rcard hi up">
+      <div class="rch"><div class="rct">Route metrics</div>${r._simulated?'<div class="rcb b-sim">Simulated</div>':'<div class="rcb b-ai">AI optimised</div>'}</div>
+      <div class="mrow"><div class="ml">Total distance</div><div class="mpair"><div class="mold">~114 km</div><div class="mnew">${r.distance_km} km</div></div></div>
+      <div class="mrow"><div class="ml">Fuel saving</div><div class="mnew">↓ ${r.fuel_saving_pct}%</div></div>
+      <div class="mrow"><div class="ml">CO₂ / shipment</div><div class="mpair"><div class="mold">4.9 kg</div><div class="mnew">${r.co2_kg} kg</div></div></div>
+      <div class="mrow"><div class="ml">Overtime reduction</div><div class="mnew">↓ ${r.overtime_reduction_hrs} hrs/run</div></div>
+      <div class="mrow"><div class="ml">SLA compliance</div><div class="mval" style="color:var(--cyan)">${r.sla_compliant?'✓ Compliant':'✗ At risk'}</div></div>
+    </div>
+
+    <div class="rcard up">
+      <div class="rch"><div class="rct">Optimised stop sequence</div><div class="rcb b-li">${stops.length-1} stops</div></div>
+      <div class="slist">${stops.map((s,i)=>`
+        <div class="si">
+          <div class="sconn"></div>
+          <div class="snode ${i===0?'dep':'stop'}">${i===0?'D':i}</div>
+          <div class="sbody">
+            <div class="sname">${s.n}</div>
+            <div class="smeta">${s.m}</div>
+            <div class="stime">ETA ${s.t} · Window ${s.w}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="ai-box up">
+      <div class="ai-hd">
+        <div class="ai-chip"><div class="ai-dot"></div>AI reasoning</div>
+      </div>
+      <div class="ai-text">${r.reasoning}</div>
+      ${r.risk_flag?`<div class="ai-risk">⚠ ${r.risk_flag}</div>`:''}
+    </div>`;
+
+  el.style.display='flex';
+  el.style.flexDirection='column';
+  el.style.gap='12px';
+}
+let lastResult = null;
+let lastZone = 'A';
+
+function exportPDF() {
+  if(!lastResult) { const b=document.querySelector('[onclick="exportPDF()"]'); const t=b.textContent; b.textContent='Run an optimisation first'; setTimeout(()=>b.textContent=t,2200); return; }
+  const z = document.getElementById('s2').options[document.getElementById('s2').selectedIndex].text;
+  const v = document.getElementById('s3').options[document.getElementById('s3').selectedIndex].text;
+  const p = document.getElementById('s4').options[document.getElementById('s4').selectedIndex].text;
+  document.getElementById('pdf-date').textContent = new Date().toLocaleDateString('en-GB', {day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('pdf-title').textContent = `AI Route Optimisation — ${z} · ${v} · Priority: ${p}`;
+  document.getElementById('pdf-grid').innerHTML = `
+    <div class="pdf-kpi"><div class="pdf-kpi-val">${lastResult.on_time_probability}%</div><div class="pdf-kpi-label">On-time probability<br>(was 81%)</div></div>
+    <div class="pdf-kpi"><div class="pdf-kpi-val">↓${lastResult.fuel_saving_pct}%</div><div class="pdf-kpi-label">Fuel saving<br>vs current plan</div></div>
+    <div class="pdf-kpi"><div class="pdf-kpi-val">${lastResult.co2_kg}kg</div><div class="pdf-kpi-label">CO₂/shipment<br>(was 4.9kg)</div></div>
+    <div class="pdf-kpi"><div class="pdf-kpi-val">${lastResult.distance_km}km</div><div class="pdf-kpi-label">Total distance<br>(was ~114km)</div></div>`;
+  document.getElementById('pdf-reasoning').textContent = lastResult.reasoning;
+  document.getElementById('pdf-risk').textContent = '⚠ ' + lastResult.risk_flag;
+  window.print();
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('on'));
+  if(btn) btn.classList.add('on');
+  else document.querySelectorAll('.ntab')[tab==='fleet'?0:tab==='planner'?1:2].classList.add('on');
+  ['fleet','analytics','planner'].forEach(v=>{
+    const el=document.getElementById('view-'+v);
+    if(el) el.style.display = v===tab ? (v==='fleet'?'grid':'block') : 'none';
+  });
+  if(tab==='fleet') setTimeout(()=>map.invalidateSize(),50);
+}
+</script>
+</body>
+</html>
