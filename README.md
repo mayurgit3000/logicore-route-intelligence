@@ -2,7 +2,7 @@
 
 A proof of concept for a Madrid logistics operator that is missing its delivery targets. It shows where the money is being lost and uses an LLM to re-plan a delivery route around the priority the planner chooses.
 
-![Route optimisation](screenshots/route-optimisation.png)
+![Route optimisation](route-optimisation.png)
 
 ## The problem
 
